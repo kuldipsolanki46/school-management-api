@@ -1,15 +1,40 @@
 # School Management API
 
-A REST API built with **Node.js**, **Express.js**, and **MySQL** that lets you add schools and fetch them sorted by proximity to a given location.
+![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Express.js](https://img.shields.io/badge/Express.js-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.x-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Railway](https://img.shields.io/badge/Deployed%20on-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)
+
+A production-ready REST API for managing school data, built with **Node.js**, **Express.js**, and **MySQL**. Supports adding schools and retrieving them sorted by proximity using the **Haversine formula**.
+
+> **Live API:** https://school-management-api-production-903f.up.railway.app
+
+---
+
+## Features
+
+- **Add School** — Validated POST endpoint to register a new school
+- **List Schools** — GET endpoint returning schools sorted by distance from user's coordinates
+- **Haversine Distance** — Accurate geographic distance calculation between two coordinates
+- **Input Validation** — Full validation using `express-validator` with descriptive error messages
+- **Security** — HTTP headers secured via `helmet`
+- **Logging** — HTTP request logging via `morgan`
+- **CORS** — Enabled for cross-origin access
+- **Global Error Handling** — Centralized error middleware for consistent error responses
 
 ---
 
 ## Tech Stack
 
-- **Runtime:** Node.js
-- **Framework:** Express.js
-- **Database:** MySQL (via `mysql2`)
-- **Dev Tool:** nodemon
+| Layer | Technology |
+|---|---|
+| Runtime | Node.js 22.x |
+| Framework | Express.js 4.x |
+| Database | MySQL 8.x (via `mysql2`) |
+| Validation | express-validator |
+| Security | helmet, cors |
+| Logging | morgan |
+| Deployment | Railway |
 
 ---
 
@@ -17,11 +42,22 @@ A REST API built with **Node.js**, **Express.js**, and **MySQL** that lets you a
 
 ```
 Nodejs_Assignment/
-├── server.js       # All routes and business logic
-├── db.js           # MySQL connection
-├── schema.sql      # Database and table setup
-├── .env            # Your local credentials (not committed)
-├── .env.example    # Template for environment variables
+├── src/
+│   ├── config/
+│   │   └── db.js                  # MySQL connection setup
+│   ├── controllers/
+│   │   └── schoolController.js    # Business logic for both APIs
+│   ├── middlewares/
+│   │   ├── validate.js            # express-validator rules
+│   │   └── errorHandler.js        # Global error handler
+│   ├── routes/
+│   │   └── schoolRoutes.js        # Route definitions
+│   └── utils/
+│       └── haversine.js           # Haversine distance formula
+├── app.js                         # Express app configuration
+├── server.js                      # Entry point — starts the server
+├── schema.sql                     # Database schema
+├── .env.example                   # Environment variable template
 ├── .gitignore
 └── package.json
 ```
@@ -33,8 +69,8 @@ Nodejs_Assignment/
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd Nodejs_Assignment
+git clone https://github.com/kuldipsolanki46/school-management-api.git
+cd school-management-api
 ```
 
 ### 2. Install dependencies
@@ -44,8 +80,6 @@ npm install
 ```
 
 ### 3. Set up MySQL database
-
-Run the schema file to create the database and table:
 
 ```bash
 mysql -u root -p < schema.sql
@@ -57,28 +91,50 @@ mysql -u root -p < schema.sql
 cp .env.example .env
 ```
 
-Edit `.env` with your MySQL credentials:
+Edit `.env` with your local MySQL credentials:
 
-```
+```env
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=your_password
 DB_NAME=school_management
+DB_PORT=3306
 PORT=3000
 ```
 
 ### 5. Start the server
 
 ```bash
-npm run dev     # development (auto-restart on changes)
-npm start       # production
+npm run dev    # Development (auto-restart on file changes)
+npm start      # Production
 ```
 
-API runs at `http://localhost:3000`
+API runs at: `http://localhost:3000`
 
 ---
 
-## API Endpoints
+## API Reference
+
+### Health Check
+
+```
+GET /
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "School Management API is running",
+  "version": "1.0.0",
+  "endpoints": {
+    "addSchool": "POST /addSchool",
+    "listSchools": "GET /listSchools?latitude=<lat>&longitude=<lon>"
+  }
+}
+```
+
+---
 
 ### POST `/addSchool`
 
@@ -95,10 +151,14 @@ Adds a new school to the database.
 }
 ```
 
-**Validation rules:**
-- All four fields are required
-- `latitude` must be a number between -90 and 90
-- `longitude` must be a number between -180 and 180
+**Validation Rules:**
+
+| Field | Type | Rules |
+|---|---|---|
+| `name` | String | Required, non-empty |
+| `address` | String | Required, non-empty |
+| `latitude` | Float | Required, between -90 and 90 |
+| `longitude` | Float | Required, between -180 and 180 |
 
 **Success Response (201):**
 
@@ -106,7 +166,13 @@ Adds a new school to the database.
 {
   "success": true,
   "message": "School added successfully",
-  "schoolId": 1
+  "data": {
+    "schoolId": 1,
+    "name": "Greenwood High School",
+    "address": "123 MG Road, Bangalore, Karnataka",
+    "latitude": 12.9716,
+    "longitude": 77.5946
+  }
 }
 ```
 
@@ -115,7 +181,10 @@ Adds a new school to the database.
 ```json
 {
   "success": false,
-  "message": "latitude must be a number between -90 and 90"
+  "message": "Validation failed",
+  "errors": [
+    { "field": "latitude", "message": "Latitude must be a number between -90 and 90" }
+  ]
 }
 ```
 
@@ -123,14 +192,14 @@ Adds a new school to the database.
 
 ### GET `/listSchools`
 
-Returns all schools sorted by distance (closest first) from the user's location.
+Returns all schools sorted by distance from the user's coordinates (closest first).
 
 **Query Parameters:**
 
-| Parameter   | Type  | Required | Description          |
-|-------------|-------|----------|----------------------|
-| `latitude`  | Float | Yes      | User's latitude      |
-| `longitude` | Float | Yes      | User's longitude     |
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `latitude` | Float | Yes | User's latitude (-90 to 90) |
+| `longitude` | Float | Yes | User's longitude (-180 to 180) |
 
 **Example Request:**
 
@@ -169,84 +238,31 @@ GET /listSchools?latitude=12.9716&longitude=77.5946
 
 ## Distance Calculation
 
-Uses the **Haversine formula** — calculates the shortest distance between two geographic coordinates on Earth's surface. Result is returned in kilometers as `distance_km`.
+Uses the **Haversine Formula** — calculates the shortest distance between two points on the Earth's surface given their latitude and longitude. Result is returned in kilometers as `distance_km`.
 
 ---
 
-## Deployment (Railway)
+## Deployment
 
-### What you need
-- A [Railway](https://railway.app) account (free, sign in with GitHub)
-- Your code pushed to a GitHub repository
+This API is deployed on **Railway** with an auto-provisioned **MySQL** database.
 
-### Step-by-step
+Every push to the `main` branch triggers an automatic rebuild and redeploy.
 
-**1. Push your code to GitHub**
-
-Make sure `.env` is in `.gitignore` (it already is). Then push:
-
-```bash
-git init
-git add .
-git commit -m "initial commit"
-git remote add origin https://github.com/<your-username>/<repo-name>.git
-git push -u origin main
+**Live Base URL:**
+```
+https://school-management-api-production-903f.up.railway.app
 ```
 
-**2. Create a MySQL database on Railway**
-
-- Go to [railway.app](https://railway.app) → New Project → Add a service → Database → **MySQL**
-- Once created, click the MySQL service → **Variables** tab
-- Note down: `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`, `MYSQLPORT`
-
-**3. Run the schema on Railway's MySQL**
-
-In the Railway MySQL service → **Query** tab, paste and run the contents of `schema.sql`.
-
-**4. Deploy the Node.js app**
-
-- In the same Railway project → **New Service** → **GitHub Repo**
-- Select your repository
-- Railway will auto-detect Node.js and run `npm start`
-
-**5. Add environment variables**
-
-In your Node.js service → **Variables** tab, add:
-
+**Test the live API:**
 ```
-DB_HOST=<MYSQLHOST from Railway>
-DB_PORT=<MYSQLPORT from Railway>
-DB_USER=<MYSQLUSER from Railway>
-DB_PASSWORD=<MYSQLPASSWORD from Railway>
-DB_NAME=<MYSQLDATABASE from Railway>
-PORT=3000
+GET https://school-management-api-production-903f.up.railway.app/listSchools?latitude=19.07&longitude=72.87
 ```
-
-**6. Get your live URL**
-
-In your Node.js service → **Settings** → **Networking** → **Generate Domain**
-
-Your API will be live at something like:
-```
-https://school-management-api-production.up.railway.app
-```
-
-Test it:
-```
-GET https://your-url.railway.app/listSchools?latitude=12.9716&longitude=77.5946
-```
-
----
-
-## Live API
-
-> **Base URL:** *(Add your Railway URL here after deploying)*
 
 ---
 
 ## Postman Collection
 
-> **Collection Link:** *(Add your exported Postman collection link here)*
+> **Collection Link:** *(Add your Postman public collection link here)*
 
 ---
 
